@@ -22,104 +22,68 @@ ChartJS.register(
 );
 
 interface DiceRoll {
-  multiplier: number;
-  sides: number|DiceRoll[];
-  // the modifier after the dice roll node, default is +
-  modifier?: "+" | "-" | "*" | "/";
+  // current value of computation, default is [0], if need to be compute, then set to empty list.
+  trial: number;
+  sides: number;
 }
 
-function parseDiceExpression(expression: string): DiceRoll {
-  // Remove all whitespace
-  expression = expression.replace(/\s+/g, '');
-  // filling up 1d before all the parentheses
-  expression = expression.replace(/\(/g, "1d(");
-  expression = expression.replace(/\)/g, ")");
-  
+function parseDiceExpression(expression: string): DiceRoll[] {
   const parseNode = (expr: string): DiceRoll => {
-    const match = expr.match(/^(\d+)(d\d+)(.*)$/);
-    if (!match) {
-      throw new Error("Invalid dice expression. Use format like '1d6' or '2d10+1d4'");
+    if(expr.includes("d")) {
+      const match = expr.match(/^(\d+)d(\d+)$/);
+      if (!match) {
+        throw new Error("Invalid base dice expression. Use format like '1d6' or constant '1'");
+      }
+      return {
+        trial: parseInt(match[1]),
+        sides: parseInt(match[2])
+      };
+    } else {
+      return {
+        trial: parseInt(expr),
+        sides: 1
+      };
     }
-    return {
-      multiplier: parseInt(match[1]),
-      sides: parseInt(match[2]),
-      modifier: match[3] as "+" | "-" | "*" | "/" || "+"
-    };
+  }
+  // Remove all whitespace
+  const components = expression.split("+");
+  const diceRolls: DiceRoll[] = [];
+  for (const component of components) {
+    diceRolls.push(parseNode(component));
   };
-  return parseNode(expression);
+  return diceRolls;
 }
 
-function getMonteCarloDistribution(node: DiceRoll, numSimulations: number): number[] {
+function getMonteCarloDistribution(diceRolls: DiceRoll[], numSimulations: number): number[] {
   const results: number[] = [];
-  
-  const evaluateNode = (node: DiceRoll): number => {
-    if (node.type === "roll") {
-      const roll = node.value!;
-      return Array(roll.count)
-        .fill(0)
-        .map(() => Math.floor(Math.random() * roll.sides) + 1)
-        .reduce((sum, val) => sum + val, 0);
-    } else {
-      const left = evaluateNode(node.left!);
-      const right = evaluateNode(node.right!);
-      switch (node.operator) {
-        case "+": return left + right;
-        case "-": return left - right;
-        case "*": return left * right;
-        case "/": return left / right;
-        default: throw new Error("Invalid operator");
+  for (let i = 0; i < numSimulations; i++) {
+    let current = 0;
+    for (const roll of diceRolls) {
+      for (let j = 0; j < roll.trial; j++) {
+        current += Math.floor(Math.random() * roll.sides) + 1;
       }
     }
-  };
-
-  for (let i = 0; i < numSimulations; i++) {
-    results.push(evaluateNode(node));
+    results.push(current);
   }
-  
   return results;
 }
 
-function getExactDistribution(node: DiceRoll): number[] {
-  const results: number[] = [];
-  
-  const evaluateNode = (node: DiceRoll): number[] => {
-    if (node.type === "roll") {
-      const roll = node.value!;
-      const outcomes: number[] = [];
-      for (let i = 0; i < roll.count; i++) {
-        const sides = roll.sides;
-        const weights = Array(sides).fill(1/sides);
-        outcomes.push(...weights);
+function getExactDistribution(diceRolls: DiceRoll[]): number[] {
+  let results: number[] = [0];
+  for (const roll of diceRolls) {
+    for (let i = 0; i < roll.trial; i++) {
+      const aug: number[] = [];
+      for (let j = 0; j < roll.sides; j++) {
+        aug.push(j + 1);
       }
-      return outcomes;
-    } else {
-      const left = evaluateNode(node.left!);
-      const right = evaluateNode(node.right!);
-      const combined: number[] = [];
-      
-      for (const l of left) {
-        for (const r of right) {
-          let result: number;
-          switch (node.operator) {
-            case "+": result = l + r; break;
-            case "-": result = l - r; break;
-            case "*": result = l * r; break;
-            case "/": result = l / r; break;
-            default: throw new Error("Invalid operator");
-          }
-          combined.push(result);
-        }
-      }
-      return combined;
+      results = results.flatMap(x => aug.map(y => x + y));
     }
-  };
-
-  return evaluateNode(node);
+  }
+  return results;
 }
 
 export default function Home() {
   const [expression, setExpression] = useState("1d6");
-  const [numRolls, setNumRolls] = useState(1);
   const [numSimulations, setNumSimulations] = useState(1000);
   const [operation, setOperation] = useState<"sum" | "min" | "max">("sum");
   const [distribution, setDistribution] = useState<number[]>([]);
@@ -145,7 +109,7 @@ export default function Home() {
       computeDistribution();
       setShouldCompute(false);
     }
-  }, [expression, numRolls, operation, useMonteCarlo, shouldCompute]);
+  }, [expression, numSimulations, operation, useMonteCarlo, shouldCompute]);
 
   const stats = {
     min: distribution.length ? Math.min(...distribution) : 0,
@@ -157,10 +121,12 @@ export default function Home() {
   const chartData = {
     labels: Array.from({length: stats.max - stats.min + 1}, (_, i) => i + stats.min),
     datasets: [{
-      label: "Frequency",
-      data: Array.from({length: stats.max - stats.min + 1}, (_, i) => 
-        distribution.filter(x => x === i + stats.min).length
-      ),
+      label: "Probability",
+      data: (useMonteCarlo ? Array.from({length: stats.max - stats.min + 1}, (_, i) => 
+        distribution.filter(x => x === i + stats.min).length / numSimulations
+      ) : Array.from({length: stats.max - stats.min + 1}, (_, i) => 
+        distribution.filter(x => x === i + stats.min).length / distribution.length
+      )),
       backgroundColor: "rgba(75, 192, 192, 0.6)",
     }]
   };
@@ -176,7 +142,7 @@ export default function Home() {
               Dice Expression
             </label>
             <div className="text-xs text-gray-500">
-              Enter dice expression in format: XdY where X is number of dice and Y is number of sides. Multiple dice can be added with +,-,*,/ or grouped with parentheses
+              Enter dice expression in format: XdY where X is number of dice and Y is number of sides. Multiple dice can be added with + operator. Other operators is not supported yet.
             </div>
             <div className="flex gap-4">
               <div className="flex-1">
@@ -195,19 +161,11 @@ export default function Home() {
                 className="p-2 border rounded"
                 title="Choose how to combine multiple dice: sum, minimum, or maximum"
               >
-                <option value="sum">Sum</option>
-                <option value="min">Min</option>
-                <option value="max">Max</option>
+                <option value="sum">Sum (default rolls)</option>
+                <option value="min">Disadvantage</option>
+                <option value="max">Advantage</option>
               </select>
-              <input
-                type="number"
-                value={numRolls}
-                onChange={(e) => setNumRolls(parseInt(e.target.value))}
-                min="1"
-                max="10000"
-                className="w-32 p-2 border rounded"
-                title="Number of times to roll the dice"
-              />
+              
             </div>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2">
