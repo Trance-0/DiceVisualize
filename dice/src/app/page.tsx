@@ -10,6 +10,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  BarController,
 } from "chart.js";
 
 ChartJS.register(
@@ -18,7 +19,8 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  BarController
 );
 
 interface DiceRoll {
