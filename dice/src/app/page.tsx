@@ -100,7 +100,7 @@ export default function Home() {
       setDistribution(results);
       setError("");
     } catch (e) {
-      setError("Invalid dice expression. Use format like '1d6' or '2d10+1d4'");
+      setError(e instanceof Error ? e.message : "Invalid dice expression. Use format like '1d6' or '2d10+1d4'");
     }
   };
 
