@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 45%, #eff6ff 100%);
+  color: var(--foreground);
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+canvas {
+  max-width: 100%;
+}
