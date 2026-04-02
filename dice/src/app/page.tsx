@@ -287,145 +287,185 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            🎲 Dice Visualizer
-          </h1>
-          <p className="text-gray-600 text-lg">
-            Probability Visualization for CoC & DnD Dice
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg shadow-slate-200/60 backdrop-blur sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-2 inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                Dice probability explorer
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                🎲 Dice Visualizer
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
+                Visualize outcome distributions for CoC and DnD rolls with exact combinatorics or Monte Carlo simulation.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[360px]">
+              <div className="rounded-2xl bg-slate-900 px-4 py-3 text-white">
+                <div className="text-xs uppercase tracking-wide text-slate-300">Method</div>
+                <div className="mt-1 text-sm font-semibold">{useMonteCarlo ? "Monte Carlo" : "Exact"}</div>
+              </div>
+              <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Operation</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{operation}</div>
+              </div>
+              <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Min</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{distribution.length ? stats.min : "--"}</div>
+              </div>
+              <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Max</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{distribution.length ? stats.max : "--"}</div>
+              </div>
+            </div>
+          </div>
         </header>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
-          <div className="grid gap-6">
-            <div>
-              <label htmlFor="diceExpression" className="block text-sm font-semibold text-gray-700 mb-2">
-                Dice Expression
-              </label>
-              <div className="text-xs text-gray-500 mb-2">
-                Enter dice expression in format: XdY where X is number of dice and Y is number of sides. Multiple dice can be combined with +, -, *, / operators. Other operators are not supported yet.
-              </div>
-              <div className="flex gap-4 flex-wrap">
-                <div className="flex-1 min-w-[200px]">
-                  <input
-                    id="diceExpression"
-                    type="text"
-                    value={expression}
-                    onChange={(e) => setExpression(e.target.value)}
-                    placeholder="e.g., 1d6, 2d10+1d4, 4d6"
-                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-                  />
-                </div>
-                <select
-                  value={operation}
-                  onChange={(e) => setOperation(e.target.value as "sum" | "min" | "max")}
-                  className="p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors bg-white"
-                  title="Choose how to combine multiple dice"
-                >
-                  <option value="sum">Sum (default rolls)</option>
-                  <option value="min">Disadvantage</option>
-                  <option value="max">Advantage</option>
-                </select>
-              </div>
-              <div className="mt-3 flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useMonteCarlo}
-                    onChange={(e) => setUseMonteCarlo(e.target.checked)}
-                    className="w-5 h-5 accent-blue-500 cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Use Monte Carlo Simulation</span>
+        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/50 sm:p-6 xl:sticky xl:top-6 xl:self-start">
+            <div className="space-y-5">
+              <div>
+                <label htmlFor="diceExpression" className="mb-2 block text-sm font-semibold text-slate-800">
+                  Dice expression
                 </label>
+                <p className="mb-3 text-xs leading-5 text-slate-500">
+                  Use XdY notation. Multiple parts can be combined with +, -, * or /. Example: <span className="font-medium text-slate-700">2d6+1d8+3</span>
+                </p>
+                <input
+                  id="diceExpression"
+                  type="text"
+                  value={expression}
+                  onChange={(e) => setExpression(e.target.value)}
+                  placeholder="e.g. 1d6, 2d10+1d4, 4d6"
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
               </div>
-              <div className="mt-3 flex items-center gap-4">
-                <div className="text-xs text-gray-500">
-                  {!useMonteCarlo && "Click 'Compute' to calculate exact probabilities"}
-                  {useMonteCarlo && "Note: Monte Carlo gives approximate probabilities, not exact"}
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-800">Operation</label>
+                  <select
+                    value={operation}
+                    onChange={(e) => setOperation(e.target.value as "sum" | "min" | "max")}
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    title="Choose how to combine multiple dice"
+                  >
+                    <option value="sum">Sum</option>
+                    <option value="min">Disadvantage / Min</option>
+                    <option value="max">Advantage / Max</option>
+                  </select>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useMonteCarlo}
+                      onChange={(e) => setUseMonteCarlo(e.target.checked)}
+                      className="mt-1 h-4 w-4 accent-blue-600"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">Monte Carlo simulation</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">
+                        {useMonteCarlo ? "Approximate probabilities from repeated simulation." : "Disabled. Exact distribution mode is active."}
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
+
               {useMonteCarlo && (
-                <div className="mt-3 flex items-center gap-4">
-                  <input
-                    type="number"
-                    value={numSimulations}
-                    onChange={(e) => setNumSimulations(parseInt(e.target.value) || 1000)}
-                    min="100"
-                    max="1000000"
-                    className="w-40 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-                    title="Number of simulations to run"
-                  />
-                  <span className="text-sm text-gray-600">simulations</span>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-800">Simulations</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      value={numSimulations}
+                      onChange={(e) => setNumSimulations(parseInt(e.target.value) || 1000)}
+                      min="100"
+                      max="1000000"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      title="Number of simulations to run"
+                    />
+                    <span className="text-xs text-slate-500">runs</span>
+                  </div>
                 </div>
               )}
-              {!useMonteCarlo && (
-                <button
-                  onClick={() => setShouldCompute(true)}
-                  disabled={loading}
-                  className="mt-4 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? "Computing..." : "Compute Exact Distribution"}
-                </button>
+
+              <div className="rounded-2xl bg-slate-900 p-4 text-white">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Execution</div>
+                <div className="mt-2 text-sm text-slate-200">
+                  {useMonteCarlo
+                    ? "Results refresh automatically when inputs change."
+                    : "Exact mode computes on demand to avoid unnecessary heavy recomputation."}
+                </div>
+                {!useMonteCarlo && (
+                  <button
+                    onClick={() => setShouldCompute(true)}
+                    disabled={loading}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    {loading ? "Computing..." : "Compute exact distribution"}
+                  </button>
+                )}
+              </div>
+
+              {error && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
               )}
             </div>
+          </aside>
 
-            {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-red-700">{error}</span>
-                </div>
+          <section className="space-y-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Minimum</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.min : "--"}</div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {distribution.length > 0 && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-blue-500">
-                <div className="text-sm text-gray-500 mb-1">Minimum</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.min}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Maximum</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.max : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-green-500">
-                <div className="text-sm text-gray-500 mb-1">Maximum</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.max}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Mean</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.mean : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-purple-500">
-                <div className="text-sm text-gray-500 mb-1">Mean</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.mean}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Median</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.median : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-orange-500">
-                <div className="text-sm text-gray-500 mb-1">Median</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.median}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Std. dev.</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.stdDev : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-pink-500">
-                <div className="text-sm text-gray-500 mb-1">Standard Deviation</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.stdDev}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Expected</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.expected : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-cyan-500">
-                <div className="text-sm text-gray-500 mb-1">Total Outcomes</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.totalOutcomes.toLocaleString()}</div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Outcomes</div>
+                <div className="mt-2 text-2xl font-bold text-slate-900">{distribution.length ? stats.totalOutcomes.toLocaleString() : "--"}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-teal-500">
-                <div className="text-sm text-gray-500 mb-1">Expected Value</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.expected}</div>
-              </div>
-              <div className="bg-white rounded-xl shadow-md p-4 border-l-4 border-indigo-500">
-                <div className="text-sm text-gray-500 mb-1">Mode(s)</div>
-                <div className="text-2xl font-bold text-gray-900 flex-wrap">
-                  {stats.mode.length > 0 ? stats.mode.join(", ") : "N/A"}
-                </div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Mode</div>
+                <div className="mt-2 break-words text-lg font-bold text-slate-900">{distribution.length ? (stats.mode.length > 0 ? stats.mode.join(", ") : "N/A") : "--"}</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Probability Distribution</h2>
-              <div className="h-[400px]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/40 sm:p-6">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Probability distribution</h2>
+                  <p className="text-sm text-slate-500">
+                    {useMonteCarlo ? "Approximate probabilities from simulation." : "Exact probabilities from combinatorial evaluation."}
+                  </p>
+                </div>
+              </div>
+              <div className="h-[320px] sm:h-[420px] xl:h-[520px]">
                 <Chart
                   type="bar"
                   data={chartData}
@@ -433,8 +473,8 @@ export default function Home() {
                 />
               </div>
             </div>
-          </>
-        )}
+          </section>
+        </div>
       </div>
     </div>
   );
