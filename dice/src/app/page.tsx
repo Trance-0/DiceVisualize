@@ -25,13 +25,27 @@ ChartJS.register(
   BarController
 );
 
+const MAX_SIMULATIONS = 200000;
+
+type Operation = "sum" | "min" | "max";
+
 interface DiceRoll {
   trial: number;
   sides: number;
 }
 
+interface DistributionResult {
+  values: number[];
+  probabilities: number[];
+  totalOutcomesText: string;
+}
+
 function parseDiceExpression(expression: string): DiceRoll[] {
   const sanitized = expression.replace(/\s+/g, "");
+
+  if (!sanitized) {
+    throw new Error("Expression cannot be empty.");
+  }
 
   if (sanitized.includes("/") || sanitized.includes("*") || sanitized.includes("-") || sanitized.includes("(") || sanitized.includes(")")) {
     throw new Error("Only + is supported between dice terms. Use formats like '1d6' or '2d10+1d4'.");
@@ -41,17 +55,22 @@ function parseDiceExpression(expression: string): DiceRoll[] {
     if (expr.includes("d")) {
       const match = expr.match(/^(\d+)d(\d+)$/);
       if (!match) {
-        throw new Error("Invalid base dice expression. Use format like '1d6' or constant '1'");
+        throw new Error("Invalid base dice expression. Use format like '1d6' or constant '1'.");
       }
-      return {
-        trial: parseInt(match[1], 10),
-        sides: parseInt(match[2], 10),
-      };
+
+      const trial = parseInt(match[1], 10);
+      const sides = parseInt(match[2], 10);
+
+      if (!Number.isInteger(trial) || !Number.isInteger(sides) || trial <= 0 || sides <= 0) {
+        throw new Error("Dice counts and sides must be positive integers.");
+      }
+
+      return { trial, sides };
     }
 
     const value = parseInt(expr, 10);
-    if (Number.isNaN(value)) {
-      throw new Error("Invalid constant value. Must be a number.");
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error("Constants must be non-negative integers.");
     }
 
     return {
@@ -60,75 +79,140 @@ function parseDiceExpression(expression: string): DiceRoll[] {
     };
   };
 
-  const components = sanitized.split("+").filter(Boolean);
-  const diceRolls: DiceRoll[] = [];
-  for (const component of components) {
-    diceRolls.push(parseNode(component));
+  return sanitized.split("+").filter(Boolean).map(parseNode);
+}
+
+function rollOnce(diceRolls: DiceRoll[]): number {
+  let total = 0;
+  for (const roll of diceRolls) {
+    if (roll.sides === 1) {
+      total += roll.trial;
+      continue;
+    }
+    for (let j = 0; j < roll.trial; j++) {
+      total += Math.floor(Math.random() * roll.sides) + 1;
+    }
   }
-  return diceRolls;
+  return total;
 }
 
 function getMonteCarloDistribution(
   diceRolls: DiceRoll[],
   numSimulations: number,
-  operation: "sum" | "min" | "max"
-): number[] {
-  const results: number[] = [];
+  operation: Operation
+): DistributionResult {
+  const safeNumSimulations = Math.min(Math.max(1, Math.floor(numSimulations)), MAX_SIMULATIONS);
+  const counts = new Map<number, number>();
 
-  for (let i = 0; i < numSimulations; i++) {
-    let current = 0;
-    let operationSeeded = false;
+  for (let i = 0; i < safeNumSimulations; i++) {
+    const first = rollOnce(diceRolls);
+    let result = first;
 
-    for (const roll of diceRolls) {
-      for (let j = 0; j < roll.trial; j++) {
-        const rollResult = Math.floor(Math.random() * roll.sides) + 1;
-        switch (operation) {
-          case "sum":
-            current += rollResult;
-            break;
-          case "min":
-            current = operationSeeded ? Math.min(current, rollResult) : rollResult;
-            operationSeeded = true;
-            break;
-          case "max":
-            current = operationSeeded ? Math.max(current, rollResult) : rollResult;
-            operationSeeded = true;
-            break;
-        }
-      }
+    if (operation === "min" || operation === "max") {
+      const second = rollOnce(diceRolls);
+      result = operation === "min" ? Math.min(first, second) : Math.max(first, second);
     }
 
-    results.push(current);
+    counts.set(result, (counts.get(result) || 0) + 1);
   }
 
-  return results;
+  const values = Array.from(counts.keys()).sort((a, b) => a - b);
+  const probabilities = values.map((value) => (counts.get(value) || 0) / safeNumSimulations);
+
+  return {
+    values,
+    probabilities,
+    totalOutcomesText: `${safeNumSimulations.toLocaleString()} simulations`,
+  };
 }
 
-function getExactDistribution(diceRolls: DiceRoll[], operation: "sum" | "min" | "max"): number[] {
-  let results: number[] = [0];
+function convolve(base: Map<number, number>, outcomes: number[]): Map<number, number> {
+  const next = new Map<number, number>();
+  for (const [sum, probability] of base.entries()) {
+    for (const outcome of outcomes) {
+      next.set(sum + outcome, (next.get(sum + outcome) || 0) + probability / outcomes.length);
+    }
+  }
+  return next;
+}
+
+function getBaseExactDistribution(diceRolls: DiceRoll[]): Map<number, number> {
+  let pmf = new Map<number, number>([[0, 1]]);
 
   for (const roll of diceRolls) {
-    for (let i = 0; i < roll.trial; i++) {
-      const aug: number[] = [];
-      for (let j = 0; j < roll.sides; j++) {
-        aug.push(j + 1);
+    if (roll.sides === 1) {
+      const shifted = new Map<number, number>();
+      for (const [sum, probability] of pmf.entries()) {
+        shifted.set(sum + roll.trial, probability);
       }
+      pmf = shifted;
+      continue;
+    }
 
-      if (operation === "sum") {
-        results = results.flatMap((x) => aug.map((y) => x + y));
-      } else if (operation === "min") {
-        results = results.flatMap((x) => aug.map((y) => (x === 0 ? y : Math.min(x, y))));
-      } else {
-        results = results.flatMap((x) => aug.map((y) => Math.max(x, y)));
-      }
+    const singleDieOutcomes = Array.from({ length: roll.sides }, (_, i) => i + 1);
+    for (let i = 0; i < roll.trial; i++) {
+      pmf = convolve(pmf, singleDieOutcomes);
     }
   }
 
-  return results;
+  return pmf;
 }
 
-function calculateStats(distribution: number[]) {
-  if (!distribution.length) {
+function transformAdvantageLike(pmf: Map<number, number>, operation: Operation): Map<number, number> {
+  if (operation === "sum") {
+    return pmf;
+  }
+
+  const values = Array.from(pmf.keys()).sort((a, b) => a - b);
+  const probabilities = values.map((value) => pmf.get(value) || 0);
+  const cdf: number[] = [];
+  let running = 0;
+  for (const p of probabilities) {
+    running += p;
+    cdf.push(running);
+  }
+
+  const transformed = new Map<number, number>();
+
+  if (operation === "max") {
+    for (let i = 0; i < values.length; i++) {
+      const prev = i === 0 ? 0 : cdf[i - 1];
+      const curr = cdf[i];
+      transformed.set(values[i], curr * curr - prev * prev);
+    }
+    return transformed;
+  }
+
+  for (let i = 0; i < values.length; i++) {
+    const prev = i === 0 ? 0 : cdf[i - 1];
+    const curr = cdf[i];
+    transformed.set(values[i], Math.pow(1 - prev, 2) - Math.pow(1 - curr, 2));
+  }
+  return transformed;
+}
+
+function getExactDistribution(diceRolls: DiceRoll[], operation: Operation): DistributionResult {
+  const base = getBaseExactDistribution(diceRolls);
+  const pmf = transformAdvantageLike(base, operation);
+  const values = Array.from(pmf.keys()).sort((a, b) => a - b);
+  const probabilities = values.map((value) => pmf.get(value) || 0);
+
+  let totalOutcomesText = `${values.length.toLocaleString()} distinct outcomes`;
+  if (operation === "sum") {
+    totalOutcomesText = `${values.length.toLocaleString()} distinct outcomes (exact)`;
+  } else {
+    totalOutcomesText = `${values.length.toLocaleString()} distinct outcomes after 2-roll ${operation === "max" ? "advantage" : "disadvantage"} transform`;
+  }
+
+  return {
+    values,
+    probabilities,
+    totalOutcomesText,
+  };
+}
+
+function calculateStats(values: number[], probabilities: number[]) {
+  if (!values.length || !probabilities.length) {
     return {
       min: 0,
       max: 0,
@@ -140,15 +224,24 @@ function calculateStats(distribution: number[]) {
     };
   }
 
-  const sorted = [...distribution].sort((a, b) => a - b);
-  const min = sorted[0];
-  const max = sorted[sorted.length - 1];
-  const total = distribution.reduce((a, b) => a + b, 0);
-  const mean = total / distribution.length;
+  const min = values[0];
+  const max = values[values.length - 1];
+  const mean = values.reduce((acc, value, index) => acc + value * probabilities[index], 0);
   const expected = mean;
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const variance = distribution.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / distribution.length;
-  const stdDev = Math.sqrt(variance);
+
+  let cumulative = 0;
+  let median = values[0];
+  for (let i = 0; i < values.length; i++) {
+    cumulative += probabilities[i];
+    if (cumulative >= 0.5) {
+      median = values[i];
+      break;
+    }
+  }
+
+  const variance = values.reduce((acc, value, index) => {
+    return acc + probabilities[index] * Math.pow(value - mean, 2);
+  }, 0);
 
   return {
     min,
@@ -156,16 +249,29 @@ function calculateStats(distribution: number[]) {
     mean,
     expected,
     median,
-    stdDev,
-    totalOutcomes: distribution.length,
+    stdDev: Math.sqrt(variance),
+    totalOutcomes: values.length,
   };
+}
+
+function getOperationHelp(operation: Operation): string {
+  switch (operation) {
+    case "min":
+      return "Disadvantage here means: roll the full expression twice independently and keep the lower total. This generalizes the standard D&D lower-of-two-rolls idea.";
+    case "max":
+      return "Advantage here means: roll the full expression twice independently and keep the higher total. This generalizes the standard D&D higher-of-two-rolls idea.";
+    default:
+      return "Sum means: evaluate the expression once and add all dice normally.";
+  }
 }
 
 export default function Home() {
   const [expression, setExpression] = useState("1d6");
   const [numSimulations, setNumSimulations] = useState(1000);
-  const [operation, setOperation] = useState<"sum" | "min" | "max">("sum");
-  const [distribution, setDistribution] = useState<number[]>([]);
+  const [operation, setOperation] = useState<Operation>("sum");
+  const [values, setValues] = useState<number[]>([]);
+  const [probabilities, setProbabilities] = useState<number[]>([]);
+  const [totalOutcomesText, setTotalOutcomesText] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [useMonteCarlo, setUseMonteCarlo] = useState(true);
   const [shouldCompute, setShouldCompute] = useState(false);
@@ -173,13 +279,29 @@ export default function Home() {
   const computeDistribution = useCallback(() => {
     try {
       const diceRolls = parseDiceExpression(expression);
-      const results = useMonteCarlo
+
+      if (useMonteCarlo) {
+        if (!Number.isInteger(numSimulations) || numSimulations <= 0) {
+          throw new Error("Simulation count must be a positive integer.");
+        }
+        if (numSimulations > MAX_SIMULATIONS) {
+          throw new Error(`Simulation count must be ${MAX_SIMULATIONS.toLocaleString()} or less.`);
+        }
+      }
+
+      const result = useMonteCarlo
         ? getMonteCarloDistribution(diceRolls, numSimulations, operation)
         : getExactDistribution(diceRolls, operation);
-      setDistribution(results);
+
+      setValues(result.values);
+      setProbabilities(result.probabilities);
+      setTotalOutcomesText(result.totalOutcomesText);
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid dice expression. Use format like '1d6' or '2d10+1d4'");
+      setValues([]);
+      setProbabilities([]);
+      setTotalOutcomesText("");
+      setError(e instanceof Error ? e.message : "Invalid dice expression. Use format like '1d6' or '2d10+1d4'.");
     }
   }, [expression, numSimulations, operation, useMonteCarlo]);
 
@@ -190,19 +312,13 @@ export default function Home() {
     }
   }, [computeDistribution, useMonteCarlo, shouldCompute]);
 
-  const stats = calculateStats(distribution);
+  const stats = calculateStats(values, probabilities);
 
   const chartData: ChartData<"bar"> = {
-    labels: Array.from({ length: Math.max(0, stats.max - stats.min + 1) }, (_, i) => i + stats.min),
+    labels: values,
     datasets: [{
       label: "Probability",
-      data: (useMonteCarlo
-        ? Array.from({ length: Math.max(0, stats.max - stats.min + 1) }, (_, i) =>
-            distribution.filter((x) => x === i + stats.min).length / numSimulations
-          )
-        : Array.from({ length: Math.max(0, stats.max - stats.min + 1) }, (_, i) =>
-            distribution.filter((x) => x === i + stats.min).length / distribution.length
-          )),
+      data: probabilities,
       backgroundColor: "rgba(75, 192, 192, 0.6)",
     }],
   };
@@ -215,7 +331,7 @@ export default function Home() {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Frequency",
+          text: "Probability",
         },
       },
       x: {
@@ -238,7 +354,7 @@ export default function Home() {
               Dice Expression
             </label>
             <div className="text-xs text-gray-500">
-              Enter dice expression in format: XdY where X is number of dice and Y is number of sides. Multiple dice can be added with + operator. Other operators are not supported yet.
+              Enter dice expression in format: XdY where X is number of dice and Y is number of sides. Multiple dice can be added with + operator. Large exact rolls such as 70d6 are supported through exact probability convolution rather than raw outcome explosion.
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
@@ -253,14 +369,17 @@ export default function Home() {
               </div>
               <select
                 value={operation}
-                onChange={(e) => setOperation(e.target.value as "sum" | "min" | "max")}
+                onChange={(e) => setOperation(e.target.value as Operation)}
                 className="p-2 border rounded"
-                title="Choose how to combine multiple dice: sum, minimum, or maximum"
+                title={getOperationHelp(operation)}
               >
                 <option value="sum">Sum (default rolls)</option>
                 <option value="min">Disadvantage</option>
                 <option value="max">Advantage</option>
               </select>
+            </div>
+            <div className="text-xs text-gray-500">
+              {getOperationHelp(operation)}
             </div>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2">
@@ -275,18 +394,18 @@ export default function Home() {
             </div>
 
             <div className="text-xs text-gray-500">
-              Note that using Monte Carlo will not give exact results, but will be faster for large numbers of rolls.
+              Monte Carlo is capped at {MAX_SIMULATIONS.toLocaleString()} simulations to avoid freezing weaker devices. Exact mode is recommended when you need deterministic results.
             </div>
             <div>
               {useMonteCarlo && (
                 <input
                   type="number"
                   value={numSimulations}
-                  onChange={(e) => setNumSimulations(parseInt(e.target.value, 10) || 1000)}
-                  min="100"
-                  max="1000000"
+                  onChange={(e) => setNumSimulations(parseInt(e.target.value, 10) || 0)}
+                  min="1"
+                  max={MAX_SIMULATIONS}
                   className="w-32 p-2 border rounded"
-                  title="Number of simulations to run"
+                  title={`Number of simulations to run (1-${MAX_SIMULATIONS.toLocaleString()})`}
                 />
               )}
               {!useMonteCarlo && (
@@ -320,14 +439,12 @@ export default function Home() {
               <div className="text-xl font-bold">{stats.expected.toFixed(2)}</div>
             </div>
           </div>
+
+          {totalOutcomesText && <div className="text-xs text-gray-500">{totalOutcomesText}</div>}
         </div>
 
         <div className="h-80 sm:h-96 bg-white border rounded p-4">
-          <Chart
-            type="bar"
-            data={chartData}
-            options={chartOptions}
-          />
+          <Chart type="bar" data={chartData} options={chartOptions} />
         </div>
       </div>
     </div>
