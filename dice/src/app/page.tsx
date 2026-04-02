@@ -53,7 +53,11 @@ function parseDiceExpression(expression: string): DiceRoll[] {
     }
   };
 
-  const components = expression.split(/[+\-*/]/).filter(c => c.trim() !== "");
+  if (expression.includes("/")) {
+    throw new Error("Division is not supported.");
+  }
+
+  const components = expression.split(/[+\-*]/).filter(c => c.trim() !== "");
   const diceRolls: DiceRoll[] = [];
   for (const component of components) {
     diceRolls.push(parseNode(component));
@@ -331,7 +335,7 @@ export default function Home() {
                   Dice expression
                 </label>
                 <p className="mb-3 text-xs leading-5 text-slate-500">
-                  Use XdY notation. Multiple parts can be combined with +, -, * or /. Example: <span className="font-medium text-slate-700">2d6+1d8+3</span>
+                  Use XdY notation. Multiple parts can be combined with +, - or *. Division is disabled. Example: <span className="font-medium text-slate-700">2d6+1d8+3</span>
                 </p>
                 <input
                   id="diceExpression"

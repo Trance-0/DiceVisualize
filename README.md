@@ -115,14 +115,6 @@ dice/
 └── next.config.ts
 ```
 
-## Future Enhancements
-
-- Preset expressions for common RPG cases
-- Export charts as images
-- Save/load favorite expressions
-- Dark mode improvements
-- Mobile-first UX refinement
-
 ## License
 
 MIT
@@ -130,8 +122,3 @@ MIT
 ## Contributing
 
 Pull requests are welcome.
-
-## Attribution
-
-- Original repository: https://github.com/Trance-0/DiceVisualize
-- Fork for contribution workflow: https://github.com/Nesbitt-bot/DiceVisualize
