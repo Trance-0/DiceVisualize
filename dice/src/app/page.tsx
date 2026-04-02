@@ -204,7 +204,7 @@ export default function Home() {
       computeDistribution();
       setShouldCompute(false);
     }
-  }, [shouldCompute, computeDistribution]);
+  }, [shouldCompute, computeDistribution, useMonteCarlo]);
 
   const stats = distribution.length ? calculateStats(distribution, useMonteCarlo) : {
     min: 0,
@@ -429,7 +429,7 @@ export default function Home() {
                 <Chart
                   type="bar"
                   data={chartData}
-                  options={chartOptions as any}
+                  options={chartOptions}
                 />
               </div>
             </div>
